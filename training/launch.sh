@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# You can choose to use multi-node training by changing the --nnodes and echo the configuration below. For demo purposes, we use 1 GPU on a single node.
 #echo "Using configuration:"
 #echo "  MASTER_ADDR:   $MASTER_ADDR"
 #echo "  MASTER_PORT:   $MASTER_PORT"
