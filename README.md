@@ -47,25 +47,21 @@ Before you begin, make sure you have the following ready:
 ```
 git clone https://github.com/EkinKarabulut/runai-vast-training-resiliency.git
 ```
+### 2. Provision VAST Data
+Create a PVC with VAST CSI filesystem and mount it to `/model`.
 
-### 2. Build & Push Model‑Loading Image (TO-DO: Do we have the Dockerfile still or do we give instrucitons to SSH to the pod?) 
+### 3. Load the Model
 
-Create the Docker image that runs `clone.sh` to:
+- Launch a Docker container using the PyTorch image via the Run:ai dashboard.
+- Exec into the container using:
+ `kubectl exec -n $PROJECT_NAME -it $POD_NAME -- /bin/bash`
+- Run the `clone.sh` script to download and prepare the model. This pulls the model from Hugging Face Hub and prepares the checkpoint directory inside your mounted VAST volume. This writes the model to /model/Meta-Llama-3.1-8B-Instruct and creates /model/checkpoints with correct permissions.
 
-- Clone **Meta-Llama-3.1-8B-Instruct** from Hugging Face into `/model/Meta-Llama-3.1-8B-Instruct`  
-- Create and set permissions on `/model/checkpoints`
+> **Note:** The VAST volume will be mounted into `/model` and should provide two directories:
+1. `/model/Meta-Llama-3.1-8B-Instruct` — the base model  
+2. `/model/checkpoints` — where training checkpoints are written
 
-```bash
-# From repository root
-cd model-loading/
-
-# Build and push
-docker build -t <REGISTRY>/model-prep:latest .
-docker push <REGISTRY>/model-prep:latest
-```
-TO_DO: Here is the link to the model loader Docker image that we built for this demo.
-
-### 3. Build & Push Training Image
+### 4. Build & Push Training Image
 
 This image installs dependencies (`requirements.txt`) and includes:
 
@@ -74,35 +70,16 @@ This image installs dependencies (`requirements.txt`) and includes:
 
 ```bash
 cd ../training/
-docker build -t <REGISTRY>/training:latest .
+docker build --platform linux/amd64 -t <REGISTRY>/runai-vast-training .
 docker push <REGISTRY>/training:latest
 ```
-Here is [the link to](docker.io/ekarabulut844/checkpointing_v2) the training Docker image that we built for this demo.
+Here is [the link to](https://hub.docker.com/r/ekarabulut844/runai-vast-training) the training Docker image that we built for this demo.
 
-### 4. Provision VAST Data
-Create a VAST Data namespace. Create a PV & PVC (e.g. vast-pvc) that mounts at `/model`.
-
-> **Note:** The VAST volume will be mounted into `/model` and should provide two directories:
-> 1. `/model/Meta-Llama-3.1-8B-Instruct` — the base model  
-> 2. `/model/checkpoints` — where training checkpoints are written
-
-### 5. Deploy the Jobs
-You’ll now launch two jobs: one to prepare the model data and the directories to write the checkpoints to, and another to run training with automatic checkpointing and resume.
-
-1. Launch the model loader
-
-This job pulls the model from Hugging Face Hub and prepares the checkpoint directory inside your mounted VAST volume:
-
-```
-runai training submit data-mover --existing-pvc claimname=$DATA,path=/model -i docker.io/<REGISTRY>/model-prep:latest
-```
-This writes the model to /model/Meta-Llama-3.1-8B-Instruct and creates /model/checkpoints with correct permissions.
-
-2. Launch the Training Job
+### 5. Launch the Training Job
 
 Once the model is in place, launch your training job:
 ```
-runai training pytorch submit lora-fine-tune-model --existing-pvc "claimname=$DATA,path=/model"  -i docker.io/<REGISTRY>/training:latest -g 1
+runai training pytorch submit lora-fine-tune-model --existing-pvc "claimname=$DATA,path=/model"  -i docker.io/<REGISTRY>/runai-vast-training -g 1
 ```
 
 ### 🧠 What to Expect During Training
@@ -110,10 +87,7 @@ Once the training job starts, logs will show the LoRA fine‑tuning in progress.
 ```
 Checkpointing to the directory ./checkpoints/Meta-Llama-3.1-8B-Instruct-finetuned/checkpoint-xxx
 ```
-If the pod crashes, is preempted, or intentionally restarted (TO-DO: Let's also explain how we simulated this), the next training run will automatically resume from the latest checkpoint:
+If the pod crashes, is preempted, or intentionally restarted, the next training run will automatically resume from the latest checkpoint:
 ```
 Resuming training from latest checkpoint: ./checkpoints/Meta-Llama-3.1-8B-Instruct-finetuned/checkpoint-xxx
 ```
-### 🔁 Simulating Failure (TO‑DO)
-To simulate a failure:
-TO-DO
